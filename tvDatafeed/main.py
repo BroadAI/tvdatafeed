@@ -10,8 +10,18 @@ from websocket import create_connection
 import requests
 import json
 
+
 logger = logging.getLogger(__name__)
 
+user_agents = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.1 Safari/605.1.15',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.1 Safari/605.1.15',
+]
 
 class Interval(enum.Enum):
     in_1_minute = "1"
@@ -29,6 +39,7 @@ class Interval(enum.Enum):
     in_monthly = "1M"
 
 
+
 class TvDatafeed:
     __sign_in_url = 'https://www.tradingview.com/accounts/signin/'
     __search_url = 'https://symbol-search.tradingview.com/symbol_search/?text={}&hl=1&exchange={}&lang=en&type=&domain=production'
@@ -40,6 +51,7 @@ class TvDatafeed:
         self,
         username: str = None,
         password: str = None,
+        token:str = None,
     ) -> None:
         """Create TvDatafeed object
 
@@ -48,15 +60,20 @@ class TvDatafeed:
             password (str, optional): tradingview password. Defaults to None.
         """
 
+        self.random_user_agent = random.choice(user_agents)
+        self.__signin_headers['User-Agent'] = self.random_user_agent
+
         self.ws_debug = False
 
-        self.token = self.__auth(username, password)
+        if token is None:
+            self.token = self.__auth(username, password)
+        else:
+            self.token = token
 
         if self.token is None:
             self.token = "unauthorized_user_token"
-            logger.warning(
-                "you are using nologin method, data you access may be limited"
-            )
+
+            logger.warning("Your Login Attempt was failed!!!!!!!!")
 
         self.ws = None
         self.session = self.__generate_session()
@@ -72,8 +89,8 @@ class TvDatafeed:
                     "password": password,
                     "remember": "on"}
             try:
-                response = requests.post(
-                    url=self.__sign_in_url, data=data, headers=self.__signin_headers)
+                response = requests.post(url=self.__sign_in_url, data=data, headers=self.__signin_headers)
+                logging.warning(f"===============> {response.json()}")
                 token = response.json()['user']['auth_token']
             except Exception as e:
                 logger.error('error while signin')
@@ -133,13 +150,13 @@ class TvDatafeed:
     @staticmethod
     def __create_df(raw_data, symbol):
         try:
-            out = re.search('"s":\[(.+?)\}\]', raw_data).group(1)
+            out = re.search(r'"s":\[(.+?)\}\]', raw_data).group(1)
             x = out.split(',{"')
             data = list()
             volume_data = True
 
             for xi in x:
-                xi = re.split("\[|:|,|\]", xi)
+                xi = re.split(r"\[|:|,|\]", xi)
                 ts = datetime.datetime.fromtimestamp(float(xi[4]))
 
                 row = [ts]
